@@ -15,7 +15,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     setWindowTitle("Фотоальбом");
     setGeometry(100, 100, 800, 600);
-
+    applyStyles();
     setupUI();
 }
 
@@ -37,10 +37,13 @@ void MainWindow::setupUI()
     connect(imageList, &QListWidget::itemClicked, this, &MainWindow::showSelectedImage);
     connect(imageList, SIGNAL(rowsDropped()), this, SLOT(updateAlbumData())); //обновление данных после перетаскивания
 
+
     imageLabel = new QLabel(this);
     imageLabel->setScaledContents(true);
 
     commentText = new QTextEdit(this);
+
+    dateLabel = new QLabel(this);
 
     addButton = new QPushButton("Добавить", this);
     connect(addButton, &QPushButton::clicked, this, &MainWindow::loadImage);
@@ -54,6 +57,11 @@ void MainWindow::setupUI()
     removeButton = new QPushButton("Удалить", this); // Создаем кнопку удаления
     connect(removeButton, &QPushButton::clicked, this, &MainWindow::removeImage);
 
+    searchLineEdit = new QLineEdit(this);
+    searchButton = new QPushButton("Найти", this);
+    connect(searchButton, &QPushButton::clicked, this, &MainWindow::searchImages);
+    searchButton->setToolTip(tr("Поиск по дате или комментарию"));
+
 
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addWidget(addButton);
@@ -64,10 +72,16 @@ void MainWindow::setupUI()
     QHBoxLayout *mainLayout = new QHBoxLayout();
     mainLayout->addWidget(imageList);
 
+    QHBoxLayout *searchLayout = new QHBoxLayout();
+    searchLayout->addWidget(searchLineEdit);
+    searchLayout->addWidget(searchButton);
+
     QVBoxLayout *rightLayout = new QVBoxLayout();
     rightLayout->addWidget(imageLabel);
     rightLayout->addWidget(commentText);
+    rightLayout->addWidget(dateLabel);
     rightLayout->addLayout(buttonLayout);
+    rightLayout->addLayout(searchLayout);
 
     mainLayout->addLayout(rightLayout);
 
@@ -92,6 +106,7 @@ void MainWindow::loadImage()
             ImageData imageData;
             imageData.path = imagePath;
             imageData.comment = "";
+            imageData.saveDate = QDateTime::currentDateTime();
             albumData.push_back(imageData);
             showSelectedImage();
         } else {
@@ -108,7 +123,11 @@ void MainWindow::showSelectedImage()
         QPixmap pixmap(imageData.path);
         imageLabel->setPixmap(pixmap);
         commentText->setText(imageData.comment);
+        dateLabel->setText(imageData.saveDate.toString());
     }
+    else {
+            dateLabel->setText("");
+        }
 }
 
 void MainWindow::saveAlbum()
@@ -116,6 +135,8 @@ void MainWindow::saveAlbum()
     int selectedIndex = imageList->currentRow();
     if (selectedIndex >= 0) {
         albumData[selectedIndex].comment = commentText->toPlainText();
+        albumData[selectedIndex].saveDate = QDateTime::currentDateTime();
+        dateLabel->setText(albumData[selectedIndex].saveDate.toString());
     }
 
     QFileDialog fileDialog(this);
@@ -126,6 +147,7 @@ void MainWindow::saveAlbum()
             QJsonObject jsonObject;
             jsonObject["path"] = imageData.path;
             jsonObject["comment"] = imageData.comment;
+            jsonObject["saveDate"] = imageData.saveDate.toString(Qt::ISODate); // Сохраняем дату в формате ISO
             jsonArray.append(jsonObject);
         }
         QJsonDocument jsonDoc(jsonArray);
@@ -163,6 +185,7 @@ void MainWindow::loadAlbum()
                     ImageData imageData;
                     imageData.path = jsonObject["path"].toString();
                     imageData.comment = jsonObject["comment"].toString();
+                    imageData.saveDate = QDateTime::fromString(jsonObject["saveDate"].toString(), Qt::ISODate); // Восстанавливаем дату из строки
                     albumData.push_back(imageData);
                     imageList->addItem(imageData.path.split('/').last());
                 }
@@ -210,7 +233,7 @@ void MainWindow::removeImage()
              // Очищаем отображение (если элементов не осталось)
              imageLabel->clear();
              commentText->clear();
-
+             dateLabel->clear();
         }
     }
 }
@@ -233,4 +256,95 @@ void MainWindow::updateAlbumData()
     albumData = newAlbumData;
      if(selectedIndex >= 0)
          imageList->setCurrentRow(selectedIndex);
+}
+
+
+void MainWindow::searchImages() {
+    QString searchText = searchLineEdit->text();
+    QString filter = searchText.toLower();
+
+    QVector<ImageData> filteredImages;
+    for (const auto& imageData : albumData) {
+        if (imageData.comment.toLower().contains(filter) ||
+            imageData.saveDate.toString().toLower().contains(filter)) {
+            filteredImages.append(imageData);
+        }
+    }
+
+    imageList->clear(); // без этого вылетает
+    albumData = filteredImages; // обновляет дату
+    for (const auto& imageData : albumData) {
+        imageList->addItem(new QListWidgetItem(imageData.path.split('/').last()));
+    }
+
+    if(albumData.isEmpty()) {
+        QMessageBox::information(this, "Поиск", "Ничего не найдено.");
+    }
+
+    // показывает 1 картинку или очищает при фейле
+     if (!filteredImages.isEmpty()){
+        imageList->setCurrentRow(0);
+        showSelectedImage();
+    } else {
+        imageLabel->clear();
+        commentText->clear();
+        dateLabel->clear();
+    }
+}
+
+void MainWindow::applyStyles() {
+
+    QString styleSheet =  "QPushButton {"
+                       "   background-color: #3498db; /* Темно-голубой */"
+                       "   color: white;"
+                       "   border: none;"
+                       "   padding: 10px 20px;"
+                       "   border-radius: 5px;"
+                       "   font-size: 14px;"
+                       "}"
+                      "QPushButton:hover {"
+                       " background-color: #2980b9; /* Темно-синий при наведении */"
+                       "}"
+                       "QPushButton:pressed {"
+                        "background-color: #1f618d; /* Еще темнее при нажатии */"
+                        "}"
+                        "QLineEdit {"
+                        "   background-color: #ecf0f1; /* Светло-серый */"
+                        "   border: 1px solid #bdc3c7; /* Граница */"
+                        "   padding: 8px;"
+                        "   border-radius: 3px;"
+                        "   font-size: 14px;"
+                        "}"
+                         "QLineEdit:focus {"
+                        "  border-color: #3498db; /* Голубая граница при фокусе */"
+                       "}"
+                      "QTextEdit {"
+                       "  background-color: #ecf0f1; /* Светло-серый */"
+                        "   border: 1px solid #bdc3c7; /* Граница */"
+                       "    padding: 8px;"
+                       "   border-radius: 3px;"
+                        "   font-size: 14px;"
+                        "}"
+                         "QTextEdit:focus {"
+                        "  border-color: #3498db; /* Голубая граница при фокусе */"
+                       "}"
+                        "QListWidget {"
+                        "  background-color: #f0f0f0; /* Светло-серый */"
+                        " border: 1px solid #d0d0d0;"
+                        "}"
+                        "QListWidget::item {"
+                        "  padding: 8px;"
+                       "  border-bottom: 1px solid #e0e0e0;"
+                       "}"
+                       "QListWidget::item:selected {"
+                       "  background-color: #f7f7f7;"
+                        "  color: #333;"
+                        "}"
+                        "QLabel { "
+                         "font-size: 14px;"
+                         "}";
+
+    this->setStyleSheet(styleSheet);
+
+
 }

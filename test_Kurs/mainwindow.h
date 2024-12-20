@@ -14,7 +14,8 @@
 #include <QMessageBox>
 #include <QPixmap>
 #include <QHBoxLayout>
-
+#include <QDateTime>
+#include <QLineEdit>
 
 namespace Ui {
 class MainWindow;
@@ -35,6 +36,8 @@ private slots:
     void loadAlbum();
     void removeImage();
     void updateAlbumData();
+    void searchImages();
+    void applyStyles();
 
 private:
     void setupUI();
@@ -42,15 +45,19 @@ private:
     Ui::MainWindow *ui;
     DragDropListWidget *imageList;
     QLabel *imageLabel;
+    QLabel *dateLabel;
     QTextEdit *commentText;
     QPushButton *addButton;
     QPushButton *saveButton;
     QPushButton *loadAlbumButton;
     QPushButton *removeButton;
+    QPushButton *searchButton;
+    QLineEdit *searchLineEdit;
 
     struct ImageData {
         QString path;
         QString comment;
+        QDateTime saveDate;
     };
 
     QVector<ImageData> albumData;
