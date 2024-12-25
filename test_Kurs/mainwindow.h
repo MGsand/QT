@@ -16,6 +16,14 @@
 #include <QHBoxLayout>
 #include <QDateTime>
 #include <QLineEdit>
+#include <QDebug>
+#include <QRegExp>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QDir>
+#include <QStandardPaths>
+#include <QInputDialog>
 
 namespace Ui {
 class MainWindow;
@@ -38,6 +46,7 @@ private slots:
     void updateAlbumData();
     void searchImages();
     void applyStyles();
+    void initDatabase();
 
 private:
     void setupUI();
@@ -53,7 +62,7 @@ private:
     QPushButton *removeButton;
     QPushButton *searchButton;
     QLineEdit *searchLineEdit;
-
+    QSqlDatabase db;
     struct ImageData {
         QString path;
         QString comment;

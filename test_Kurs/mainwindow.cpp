@@ -17,6 +17,7 @@ MainWindow::MainWindow(QWidget *parent) :
     setGeometry(100, 100, 800, 600);
     applyStyles();
     setupUI();
+    initDatabase();
 }
 
 MainWindow::~MainWindow()
@@ -25,7 +26,46 @@ MainWindow::~MainWindow()
 }
 
 
+void MainWindow::initDatabase()
+{
+    //Определение пути к базе данных
+    QString dbPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (dbPath.isEmpty()) {
+        qDebug() << "Error: Cannot determine writable location.";
+        QMessageBox::critical(this, "Error", "Cannot determine writable location.");
+         return;
+    }
+    QDir dir;// создаём объект QDir для работы с каталогами
+    if (!dir.exists(dbPath)) {
+          if(!dir.mkpath(dbPath))
+          {
+             qDebug() << "Error: Failed to create database directory";
+              QMessageBox::critical(this, "Error", "Failed to create database directory.");
+              return;
+          }
+    }
+      dbPath += "/photoalbum.db"; // добавляем имя файла базы данных к пути
 
+    //Создание и настройка объекта QSqlDatabase
+    db = QSqlDatabase::addDatabase("QSQLITE"); //драйвер SQLITE
+    db.setDatabaseName(dbPath);//Устанавливаем имя файла базы данных
+
+    //Открытие базы данных
+    if (!db.open()) {
+        qDebug() << "Error: Cannot open database: " << db.lastError().text();
+        QMessageBox::critical(this, "Error", "Cannot open database: " + db.lastError().text());
+       return;
+    }
+
+    // Создание таблицы
+     QSqlQuery query(db);
+     if (!query.exec("CREATE TABLE IF NOT EXISTS albums (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, photo_count INTEGER, last_saved TEXT)")) {
+            qDebug() << "Error: Cannot create table: " << query.lastError().text();
+             QMessageBox::critical(this, "Error", "Cannot create table: " + query.lastError().text());
+            return;
+     }
+
+}
 
 
 void MainWindow::setupUI()
@@ -133,10 +173,12 @@ void MainWindow::showSelectedImage()
 void MainWindow::saveAlbum()
 {
     int selectedIndex = imageList->currentRow();
-    if (selectedIndex >= 0) {
+      QString albumName = QInputDialog::getText(this, "Имя альбома", "Введите имя альбома:", QLineEdit::Normal, "Мой альбом");
+    if (selectedIndex >= 0)
+    {
         albumData[selectedIndex].comment = commentText->toPlainText();
         albumData[selectedIndex].saveDate = QDateTime::currentDateTime();
-        dateLabel->setText(albumData[selectedIndex].saveDate.toString());
+         dateLabel->setText(albumData[selectedIndex].saveDate.toString());
     }
 
     QFileDialog fileDialog(this);
@@ -147,7 +189,7 @@ void MainWindow::saveAlbum()
             QJsonObject jsonObject;
             jsonObject["path"] = imageData.path;
             jsonObject["comment"] = imageData.comment;
-            jsonObject["saveDate"] = imageData.saveDate.toString(Qt::ISODate); // Сохраняем дату в формате ISO
+             jsonObject["saveDate"] = imageData.saveDate.toString(Qt::ISODate); // Сохраняем дату в формате ISO
             jsonArray.append(jsonObject);
         }
         QJsonDocument jsonDoc(jsonArray);
@@ -156,7 +198,18 @@ void MainWindow::saveAlbum()
         if (saveFile.open(QIODevice::WriteOnly)) {
            saveFile.write(jsonDoc.toJson());
            saveFile.close();
-           QMessageBox::information(this, "Сохранено", "Альбом успешно сохранен.");
+            QSqlQuery query(db);
+            query.prepare("INSERT INTO albums (name, photo_count, last_saved) VALUES (:name, :photo_count, :last_saved)");
+            query.bindValue(":name", albumName);
+            query.bindValue(":photo_count", albumData.count());
+            query.bindValue(":last_saved", QDateTime::currentDateTime().toString(Qt::ISODate));
+           if (!query.exec()) {
+                 qDebug() << "Error: Cannot insert into table: " << query.lastError().text();
+                QMessageBox::critical(this, "Ошибка", "Ошибка при сохранении данных в БД: " + query.lastError().text());
+            } else
+            {
+               QMessageBox::information(this, "Сохранено", "Альбом успешно сохранен, и данные занесены в БД.");
+            }
         } else {
             QMessageBox::critical(this, "Ошибка", "Не удалось сохранить альбом.");
         }
